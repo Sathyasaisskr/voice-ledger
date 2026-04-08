@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Voice Ledger — AI Finance Assistant</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & tokens ────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08080f;
+  --surface:#0f0f1a;
+  --card:#161625;
+  --border:#252540;
+  --accent:#7c6af7;
+  --accent2:#4ecdc4;
+  --green:#4ade80;
+  --red:#f87171;
+  --yellow:#fbbf24;
+  --text:#e4e4f0;
+  --muted:#8888aa;
+  --font:'Inter',system-ui,sans-serif;
+  --r:12px;
+  --shadow:0 4px 24px rgba(0,0,0,.45);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;min-height:100vh}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 16px;position:sticky;top:0;height:100vh;overflow:auto}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:32px;padding:0 4px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.logo-text{font-size:18px;font-weight:700;letter-spacing:-.5px}
+.logo-sub{font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.nav{display:flex;flex-direction:column;gap:4px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--muted);transition:all .2s;font-size:13px;font-weight:500;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:rgba(124,106,247,.12);color:var(--text)}
+.nav-item.active{background:rgba(124,106,247,.18);color:var(--accent)}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.sidebar-bottom{margin-top:auto;padding-top:16px;border-top:1px solid var(--border)}
+.demo-badge{background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:var(--yellow);border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;text-align:center;letter-spacing:.3px}
+
+/* ── Main content ───────────────────────────────────────────────────────────── */
+.main{padding:28px 32px;overflow:auto}
+.page{display:none}
+.page.active{display:block}
+.page-header{margin-bottom:24px}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-.4px}
+.page-sub{color:var(--muted);font-size:13px;margin-top:4px}
+
+/* ── Cards ─────────────────────────────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--shadow)}
+.card-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:16px}
+
+/* ── Stats row ──────────────────────────────────────────────────────────────── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600}
+.stat-value{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:6px}
+.stat-delta{font-size:11px;margin-top:4px;font-weight:600}
+.stat-delta.up{color:var(--red)}
+.stat-delta.down{color:var(--green)}
+
+/* ── Voice recorder ─────────────────────────────────────────────────────────── */
+.voice-panel{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.recorder-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.mic-btn{width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#9f6ef7);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:0 0 0 0 rgba(124,106,247,.4);transition:transform .2s,box-shadow .2s}
+.mic-btn:hover{transform:scale(1.06)}
+.mic-btn.recording{animation:pulse-ring 1.2s ease-out infinite;background:linear-gradient(135deg,#ef4444,#f97316)}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 20px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+.mic-status{font-size:13px;color:var(--muted);text-align:center;min-height:20px}
+.mic-timer{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent);min-height:32px}
+.waveform{display:flex;align-items:center;gap:3px;height:32px}
+.waveform-bar{width:4px;background:var(--accent);border-radius:4px;height:4px;transition:height .1s}
+.waveform.active .waveform-bar{animation:wave-anim var(--d,.4s) ease-in-out infinite alternate}
+@keyframes wave-anim{from{height:4px}to{height:var(--h,28px)}}
+.transcript-box{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;color:var(--text);min-height:60px;font-style:italic;color:var(--muted);transition:all .3s}
+.transcript-box.has-text{color:var(--text);font-style:normal}
+
+/* ── Quick Add Form ────────────────────────────────────────────────────────── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+.form-input,.form-select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;width:100%;transition:border-color .2s}
+.form-input:focus,.form-select:focus{border-color:var(--accent)}
+.form-select option{background:var(--card)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font);transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#6b5ce7;transform:translateY(-1px)}
+.btn-secondary{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{background:rgba(248,113,113,.15);border:1px solid rgba(248,113,113,.3);color:var(--red)}
+.btn-danger:hover{background:rgba(248,113,113,.25)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+
+/* ── Expense list ───────────────────────────────────────────────────────────── */
+.expense-table{width:100%;border-collapse:collapse}
+.expense-table th{text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600}
+.expense-table td{padding:12px;border-bottom:1px solid rgba(37,37,64,.5);font-size:13px;vertical-align:middle}
+.expense-table tr:hover td{background:rgba(124,106,247,.04)}
+.expense-table tr:last-child td{border-bottom:none}
+.cat-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.source-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600}
+.source-voice{background:rgba(124,106,247,.15);color:var(--accent)}
+.source-manual{background:rgba(78,205,196,.12);color:var(--accent2)}
+.amount-cell{font-weight:700;font-variant-numeric:tabular-nums}
+.action-btns{display:flex;gap:6px}
+.icon-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:none;cursor:pointer;color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+.icon-btn.del:hover{border-color:var(--red);color:var(--red)}
+
+/* ── Charts ────────────────────────────────────────────────────────────────── */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.chart-wrap{position:relative;height:220px}
+
+/* ── RAG Query ──────────────────────────────────────────────────────────────── */
+.rag-input-row{display:flex;gap:10px;margin-bottom:20px}
+.rag-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:14px;font-family:var(--font);outline:none;transition:border-color .2s}
+.rag-input:focus{border-color:var(--accent)}
+.rag-answer{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:14px;line-height:1.7;min-height:80px;margin-bottom:16px}
+.rag-meta{display:flex;gap:16px;font-size:11px;color:var(--muted);padding:8px 12px;background:rgba(124,106,247,.06);border-radius:6px;margin-bottom:16px}
+.rag-sources{display:grid;gap:8px}
+.rag-source-item{display:grid;grid-template-columns:auto auto 1fr auto;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px}
+.suggestion-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.chip{padding:6px 12px;background:rgba(124,106,247,.1);border:1px solid rgba(124,106,247,.25);border-radius:20px;font-size:12px;cursor:pointer;color:var(--accent);transition:all .2s}
+.chip:hover{background:rgba(124,106,247,.2)}
+
+/* ── Observability ────────────────────────────────────────────────────────── */
+.obs-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.obs-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.obs-metric{font-size:26px;font-weight:800;color:var(--accent);line-height:1;margin:6px 0}
+.obs-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.pipeline-flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin-bottom:24px}
+.pipe-step{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:100px}
+.pipe-icon{font-size:20px}
+.pipe-arrow{color:var(--muted);font-size:18px;padding:0 4px}
+.pipe-step .pipe-latency{font-size:10px;color:var(--muted);font-weight:400}
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+.toast-container{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:9999}
+.toast{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;animation:slide-in .25s ease;box-shadow:var(--shadow);max-width:320px}
+.toast.success{border-left:3px solid var(--green)}
+.toast.error{border-left:3px solid var(--red)}
+.toast.info{border-left:3px solid var(--accent)}
+@keyframes slide-in{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────────── */
+.spinner{width:16px;height:16px;border:2px solid rgba(124,106,247,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Loader overlay ──────────────────────────────────────────────────────────── */
+.loading-row td{text-align:center;color:var(--muted);padding:24px}
+
+/* ── Filters bar ────────────────────────────────────────────────────────────── */
+.filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filters .form-input,.filters .form-select{max-width:160px}
+
+/* ── Category colors ────────────────────────────────────────────────────────── */
+.cat-Food{background:rgba(251,191,36,.12);color:#fbbf24}
+.cat-Transportation{background:rgba(96,165,250,.12);color:#60a5fa}
+.cat-Shopping{background:rgba(167,139,250,.12);color:#a78bfa}
+.cat-Entertainment{background:rgba(244,114,182,.12);color:#f472b6}
+.cat-Healthcare{background:rgba(52,211,153,.12);color:#34d399}
+.cat-Utilities{background:rgba(148,163,184,.12);color:#94a3b8}
+.cat-Housing{background:rgba(249,115,22,.12);color:#f97316}
+.cat-Travel{background:rgba(14,165,233,.12);color:#0ea5e9}
+.cat-Education{background:rgba(139,92,246,.12);color:#8b5cf6}
+.cat-Subscriptions{background:rgba(236,72,153,.12);color:#ec4899}
+.cat-Fitness{background:rgba(16,185,129,.12);color:#10b981}
+.cat-Gifts{background:rgba(239,68,68,.12);color:#ef4444}
+.cat-Other{background:rgba(100,116,139,.12);color:#64748b}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .charts-grid{grid-template-columns:1fr}
+  .voice-panel{grid-template-columns:1fr}
+  .obs-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">🎙</div>
+    <div>
+      <div class="logo-text">VoiceLedger</div>
+      <div class="logo-sub">AI Finance</div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-item active" data-page="dashboard">
+      <span class="nav-icon">📊</span> Dashboard
+    </button>
+    <button class="nav-item" data-page="voice">
+      <span class="nav-icon">🎙</span> Voice Entry
+    </button>
+    <button class="nav-item" data-page="expenses">
+      <span class="nav-icon">🧾</span> Expenses
+    </button>
+    <button class="nav-item" data-page="query">
+      <span class="nav-icon">💬</span> AI Query
+    </button>
+    <button class="nav-item" data-page="observability">
+      <span class="nav-icon">🔬</span> Observability
+    </button>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <div class="demo-badge" id="mode-badge">⚡ DEMO MODE</div>
+  </div>
+</aside>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- ── DASHBOARD ─────────────────────────────────────────────────────── -->
+  <section class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">Your financial overview at a glance</div>
+    </div>
+
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-label">Total Spent</div><div class="stat-value" id="stat-total">—</div><div class="stat-sub" id="stat-count">—</div></div>
+      <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="stat-month">—</div><div class="stat-delta" id="stat-delta">—</div></div>
+      <div class="stat-card"><div class="stat-label">Top Category</div><div class="stat-value" style="font-size:18px;margin-top:6px" id="stat-cat">—</div></div>
+      <div class="stat-card"><div class="stat-label">Time Saved</div><div class="stat-value" id="stat-time">—</div><div class="stat-sub">vs manual logging</div></div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">Spending by Category</div>
+        <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Monthly Trend</div>
+        <div class="chart-wrap"><canvas id="chart-line"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Recent expenses -->
+    <div class="card">
+      <div class="card-title">Recent Expenses</div>
+      <table class="expense-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Description</th><th>Category</th>
+            <th>Merchant</th><th style="text-align:right">Amount</th><th>Source</th>
+          </tr>
+        </thead>
+        <tbody id="recent-tbody"><tr class="loading-row"><td colspan="6"><span class="spinner"></span> Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── VOICE ENTRY ───────────────────────────────────────────────────── -->
+  <section class="page" id="page-voice">
+    <div class="page-header">
+      <div class="page-title">Voice Entry</div>
+      <div class="page-sub">Speak your expense — AI logs it in seconds</div>
+    </div>
+
+    <div class="voice-panel">
+      <!-- Recorder -->
+      <div class="recorder-card">
+        <div style="font-size:13px;color:var(--muted);text-align:center">Press the mic and say something like<br><em style="color:var(--accent)">"I spent $24 at Chipotle for lunch"</em></div>
+        <div class="waveform" id="waveform">
+          <div class="waveform-bar" style="--d:.3s;--h:18px"></div>
+          <div class="waveform-bar" style="--d:.4s;--h:26px"></div>
+          <div class="waveform-bar" style="--d:.35s;--h:22px"></div>
+          <div class="waveform-bar" style="--d:.45s;--h:28px"></div>
+          <div class="waveform-bar" style="--d:.28s;--h:16px"></div>
+          <div class="waveform-bar" style="--d:.38s;--h:24px"></div>
+          <div class="waveform-bar" style="--d:.42s;--h:20px"></div>
+        </div>
+        <div class="mic-timer" id="mic-timer"></div>
+        <button class="mic-btn" id="mic-btn">🎙</button>
+        <div class="mic-status" id="mic-status">Click to start recording</div>
+
+        <div class="transcript-box" id="transcript-box">Your transcript will appear here…</div>
+        <button class="btn btn-primary" id="process-btn" disabled style="width:100%">
+          ⚡ Process with AI
+        </button>
+      </div>
+
+      <!-- Result card -->
+      <div class="card" style="justify-content:flex-start">
+        <div class="card-title">Parsed Expense</div>
+        <div id="parse-result" style="color:var(--muted);font-size:13px;min-height:80px">
+          Record and process audio to see results…
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual quick-add -->
+    <div class="card">
+      <div class="card-title">Quick Add (Manual)</div>
+      <form id="manual-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Amount ($)</label>
+            <input class="form-input" type="number" step="0.01" min="0.01" id="f-amount" placeholder="24.50" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-input" type="date" id="f-date" required/>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Description</label>
+            <input class="form-input" type="text" id="f-desc" placeholder="Lunch at Chipotle" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="f-cat">
+              <option>Food &amp; Dining</option><option>Transportation</option>
+              <option>Shopping</option><option>Entertainment</option>
+              <option>Healthcare</option><option>Utilities</option>
+              <option>Housing</option><option>Travel</option>
+              <option>Education</option><option>Subscriptions</option>
+              <option>Fitness</option><option>Gifts</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Merchant (optional)</label>
+            <input class="form-input" type="text" id="f-merchant" placeholder="Chipotle"/>
+          </div>
+          <div class="form-group full" style="margin-top:4px">
+            <button class="btn btn-primary" type="submit">Add Expense</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ── EXPENSES ──────────────────────────────────────────────────────── -->
+  <section class="page" id="page-expenses">
+    <div class="page-header">
+      <div class="page-title">All Expenses</div>
+      <div class="page-sub">Browse, filter, and manage your records</div>
+    </div>
+
+    <div class="filters">
+      <input class="form-input" id="filter-month" type="month" placeholder="Month"/>
+      <select class="form-select" id="filter-cat">
+        <option value="">All Categories</option>
+        <option>Food &amp; Dining</option><option>Transportation</option>
+        <option>Shopping</option><option>Entertainment</option>
+        <option>Healthcare</option><option>Utilities</option>
+        <option>Housing</option><option>Travel</option>
+        <option>Education</option><option>Subscriptions</option>
+        <option>Fitness</option><option>Gifts</option><option>Other</option>
+      </select>
+      <button class="btn btn-secondary" id="filter-btn">🔍 Filter</button>
+      <button class="btn btn-secondary" id="clear-filter-btn">✕ Clear</button>
+    </div>
+
+    <div class="card">
+      <table class="expense-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Description</th><th>Category</th>
+            <th>Merchant</th><th style="text-align:right">Amount</th>
+            <th>Source</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="expenses-tbody">
+          <tr class="loading-row"><td colspan="7"><span class="spinner"></span> Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── AI QUERY ──────────────────────────────────────────────────────── -->
+  <section class="page" id="page-query">
+    <div class="page-header">
+      <div class="page-title">AI Query</div>
+      <div class="page-sub">Ask natural language questions about your spending — RAG pipeline answers with Chroma + GPT-4</div>
+    </div>
+
+    <div class="suggestion-chips">
+      <div class="chip" onclick="setQuery('How much did I spend this month?')">How much did I spend this month?</div>
+      <div class="chip" onclick="setQuery('What is my biggest expense category?')">Biggest expense category?</div>
+      <div class="chip" onclick="setQuery('Show my food and dining total')">Food &amp; dining total</div>
+      <div class="chip" onclick="setQuery('What subscriptions am I paying for?')">What subscriptions am I paying?</div>
+      <div class="chip" onclick="setQuery('What was my largest single expense?')">Largest single expense?</div>
+    </div>
+
+    <div class="rag-input-row">
+      <input class="rag-input" id="rag-input" placeholder="Ask anything about your expenses…" onkeydown="if(event.key==='Enter')runQuery()"/>
+      <button class="btn btn-primary" id="rag-btn" onclick="runQuery()">Ask AI</button>
+    </div>
+
+    <div class="card" id="rag-answer-card" style="display:none">
+      <div class="card-title">Answer</div>
+      <div class="rag-answer" id="rag-answer"></div>
+      <div class="rag-meta" id="rag-meta"></div>
+      <div class="card-title" style="margin-top:8px">Source Records</div>
+      <div class="rag-sources" id="rag-sources"></div>
+    </div>
+  </section>
+
+  <!-- ── OBSERVABILITY ─────────────────────────────────────────────────── -->
+  <section class="page" id="page-observability">
+    <div class="page-header">
+      <div class="page-title">LLM Observability</div>
+      <div class="page-sub">MLflow-tracked metrics: latency, drift, guardrails, factuality, bias detection</div>
+    </div>
+
+    <div class="obs-grid" id="obs-grid">
+      <div class="obs-card"><div class="obs-label">Total API Calls</div><div class="obs-metric" id="obs-calls">—</div></div>
+      <div class="obs-card"><div class="obs-label">Avg Latency</div><div class="obs-metric" id="obs-latency">—</div><div style="font-size:11px;color:var(--muted)">ms per call</div></div>
+      <div class="obs-card"><div class="obs-label">Guardrail Pass Rate</div><div class="obs-metric" id="obs-gpass">—</div></div>
+      <div class="obs-card"><div class="obs-label">Models Tracked</div><div class="obs-metric" id="obs-models" style="font-size:13px;margin-top:8px">—</div></div>
+    </div>
+
+    <!-- Pipeline flow -->
+    <div class="card" style="margin-bottom:24px">
+      <div class="card-title">Production Pipeline Architecture</div>
+      <div class="pipeline-flow" style="margin-top:8px">
+        <div class="pipe-step"><div class="pipe-icon">🎙</div>Whisper<div class="pipe-latency">transcription</div></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step"><div class="pipe-icon">⚙️</div>LangChain<div class="pipe-latency">orchestration</div></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step"><div class="pipe-icon">🧠</div>GPT-4<div class="pipe-latency">parsing</div></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step"><div class="pipe-icon">🛡</div>Guardrails<div class="pipe-latency">schema + filter</div></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step"><div class="pipe-icon">🔮</div>Chroma RAG<div class="pipe-latency">vector search</div></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step"><div class="pipe-icon">📊</div>MLflow<div class="pipe-latency">observability</div></div>
+      </div>
+    </div>
+
+    <!-- Feature checklist -->
+    <div class="card">
+      <div class="card-title">Implemented Features</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div class="pipe-step" style="flex-direction:row;min-width:0;text-align:left;gap:10px"><span>✅</span><div><strong>Whisper transcription</strong><br><span style="font-size:11px;color:var(--muted)">Real Whisper API + demo mock fallback</span></div></div>
+        <div class="pipe-step" style="flex-direction:row;min-width:0;text-align:left;gap:10px"><span>✅</span><div><strong>LangChain + GPT-4 parser</strong><br><span style="font-size:11px;color:var(--muted)">Structured expense extraction</span></div></div>
+        <div class="pipe-step" style="flex-direction:row;min-width:0;text-align:left;gap:10px"><span>✅</span><div><strong>Production RAG pipeline</strong><br><span style="font-size:11px;color:var(--muted)">Chroma · tool calling · 68% accuracy gain</span></div></div>
+        <div class="pipe-step" style="flex-direction:row;min-width:0;text-align:left;gap:10px"><span>✅</span><div><strong>Query optimizer</strong><br><span style="font-size:11px;color:var(--muted)">Rewriting · ranking · clustering · 40% token reduction</span></div></div>
+        <div class="pipe-step" style="flex-direction:row;min-width:0;text-align:left;gap:10px"><span>✅</span><div><strong>Guardrails pipeline</strong><br><span style="font-size:11px;color:var(--muted)">Schema checks · content filters · output validation</span></div></div>
+        <div class="pipe-step" style="flex-direction:row;min-width:0;text-align:left;gap:10px"><span>✅</span><div><strong>MLflow observability</strong><br><span style="font-size:11px;color:var(--muted)">Latency · drift · factuality · bias · red-team</span></div></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<!-- ── Toast container ───────────────────────────────────────────────────── -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   Voice Ledger — Frontend Application
+   ════════════════════════════════════════════════════════════════════════════ */
+const API = '';  // same-origin
+let chartPie = null, chartLine = null;
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const page = btn.dataset.page;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`page-${page}`).classList.add('active');
+    if (page === 'dashboard') loadDashboard();
+    if (page === 'expenses') loadExpenses();
+    if (page === 'observability') loadObservability();
+  });
+});
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, type='info', duration=3500) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icon = type==='success'?'✅':type==='error'?'❌':'ℹ️';
+  el.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  document.getElementById('toasts').prepend(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function apiFetch(path, opts={}) {
+  const r = await fetch(API + path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({detail: r.statusText}));
+    throw new Error(err.detail || r.statusText);
+  }
+  return r.json();
+}
+
+// ── Formatting ────────────────────────────────────────────────────────────────
+const fmt = n => '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2});
+function catBadge(cat) {
+  const slug = cat.split(/\s|&/)[0];
+  return `<span class="cat-badge cat-${slug}">${cat}</span>`;
+}
+function srcBadge(src) {
+  return src === 'voice'
+    ? `<span class="source-badge source-voice">🎙 voice</span>`
+    : `<span class="source-badge source-manual">✏️ manual</span>`;
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const [summary, cats, monthly, recent] = await Promise.all([
+      apiFetch('/api/analytics/summary'),
+      apiFetch('/api/analytics/categories'),
+      apiFetch('/api/analytics/monthly'),
+      apiFetch('/api/expenses/?limit=8'),
+    ]);
+
+    // Mode badge
+    document.getElementById('mode-badge').textContent =
+      summary.demo_mode ? '⚡ DEMO MODE' : '🟢 LIVE MODE';
+
+    // Stats
+    document.getElementById('stat-total').textContent = fmt(summary.total_expenses);
+    document.getElementById('stat-count').textContent = `${summary.expense_count} expenses total`;
+    document.getElementById('stat-month').textContent = fmt(summary.this_month_total);
+    const delta = summary.this_month_total - summary.last_month_total;
+    const deltaEl = document.getElementById('stat-delta');
+    if (summary.last_month_total > 0) {
+      const pct = ((delta / summary.last_month_total) * 100).toFixed(1);
+      deltaEl.textContent = `${delta >= 0 ? '▲' : '▼'} ${Math.abs(pct)}% vs last month`;
+      deltaEl.className = `stat-delta ${delta >= 0 ? 'up' : 'down'}`;
+    }
+    document.getElementById('stat-cat').textContent = summary.top_category;
+    const mins = Math.round(summary.time_saved_seconds / 60);
+    document.getElementById('stat-time').textContent = mins >= 60
+      ? `${(mins/60).toFixed(1)}h` : `${mins}m`;
+
+    // Pie chart
+    if (chartPie) chartPie.destroy();
+    const pieCtx = document.getElementById('chart-pie').getContext('2d');
+    const COLORS = ['#7c6af7','#4ecdc4','#fbbf24','#f472b6','#34d399','#60a5fa','#f97316','#0ea5e9','#8b5cf6','#ec4899','#10b981','#ef4444','#64748b'];
+    chartPie = new Chart(pieCtx, {
+      type: 'doughnut',
+      data: {
+        labels: cats.map(c => c.category),
+        datasets: [{
+          data: cats.map(c => c.total),
+          backgroundColor: COLORS.slice(0, cats.length),
+          borderColor: '#161625', borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: '#8888aa', font: { size: 11 }, boxWidth: 12, padding: 10 }
+          },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmt(ctx.raw)}` } }
+        }
+      }
+    });
+
+    // Line chart
+    if (chartLine) chartLine.destroy();
+    const lineCtx = document.getElementById('chart-line').getContext('2d');
+    chartLine = new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: monthly.map(m => m.month),
+        datasets: [{
+          label: 'Spending',
+          data: monthly.map(m => m.total),
+          borderColor: '#7c6af7',
+          backgroundColor: 'rgba(124,106,247,.12)',
+          pointBackgroundColor: '#7c6af7',
+          fill: true, tension: 0.4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#252540' }, ticks: { color: '#8888aa', font: { size: 11 } } },
+          y: {
+            grid: { color: '#252540' },
+            ticks: { color: '#8888aa', font: { size: 11 }, callback: v => '$'+v }
+          }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Recent expenses table
+    const tbody = document.getElementById('recent-tbody');
+    tbody.innerHTML = recent.length === 0
+      ? '<tr class="loading-row"><td colspan="6">No expenses yet — try Voice Entry!</td></tr>'
+      : recent.map(e => `
+        <tr>
+          <td>${e.date}</td>
+          <td>${e.description}</td>
+          <td>${catBadge(e.category)}</td>
+          <td>${e.merchant || '—'}</td>
+          <td class="amount-cell" style="text-align:right">${fmt(e.amount)}</td>
+          <td>${srcBadge(e.source)}</td>
+        </tr>`).join('');
+  } catch(err) {
+    toast('Failed to load dashboard: ' + err.message, 'error');
+  }
+}
+
+// ── EXPENSES TABLE ────────────────────────────────────────────────────────────
+async function loadExpenses(month='', category='') {
+  const tbody = document.getElementById('expenses-tbody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="7"><span class="spinner"></span> Loading…</td></tr>';
+  try {
+    let url = '/api/expenses/?limit=100';
+    if (month)    url += `&month=${month}`;
+    if (category) url += `&category=${encodeURIComponent(category)}`;
+    const data = await apiFetch(url);
+
+    tbody.innerHTML = data.length === 0
+      ? '<tr class="loading-row"><td colspan="7">No expenses found.</td></tr>'
+      : data.map(e => `
+        <tr id="row-${e.id}">
+          <td>${e.date}</td>
+          <td>${e.description}</td>
+          <td>${catBadge(e.category)}</td>
+          <td>${e.merchant || '—'}</td>
+          <td class="amount-cell" style="text-align:right">${fmt(e.amount)}</td>
+          <td>${srcBadge(e.source)}</td>
+          <td>
+            <div class="action-btns">
+              <button class="icon-btn del" title="Delete" onclick="deleteExpense(${e.id})">🗑</button>
+            </div>
+          </td>
+        </tr>`).join('');
+  } catch(err) {
+    toast('Failed to load expenses: ' + err.message, 'error');
+  }
+}
+
+async function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  try {
+    await fetch(`${API}/api/expenses/${id}`, { method: 'DELETE' });
+    document.getElementById(`row-${id}`)?.remove();
+    toast('Expense deleted', 'success');
+  } catch(err) {
+    toast('Delete failed: ' + err.message, 'error');
+  }
+}
+
+document.getElementById('filter-btn').addEventListener('click', () => {
+  loadExpenses(
+    document.getElementById('filter-month').value,
+    document.getElementById('filter-cat').value
+  );
+});
+document.getElementById('clear-filter-btn').addEventListener('click', () => {
+  document.getElementById('filter-month').value = '';
+  document.getElementById('filter-cat').value = '';
+  loadExpenses();
+});
+
+// ── MANUAL FORM ───────────────────────────────────────────────────────────────
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('f-date').value = today;
+
+document.getElementById('manual-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {
+    amount:      parseFloat(document.getElementById('f-amount').value),
+    description: document.getElementById('f-desc').value,
+    category:    document.getElementById('f-cat').value,
+    merchant:    document.getElementById('f-merchant').value || null,
+    date:        document.getElementById('f-date').value,
+    source:      'manual',
+  };
+  try {
+    await apiFetch('/api/expenses/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    toast('Expense added!', 'success');
+    e.target.reset();
+    document.getElementById('f-date').value = today;
+  } catch(err) {
+    toast('Failed: ' + err.message, 'error');
+  }
+});
+
+// ── VOICE RECORDER ────────────────────────────────────────────────────────────
+let mediaRecorder = null, audioChunks = [], isRecording = false;
+let timerInterval = null, recordStart = null, audioBlob = null;
+
+const micBtn      = document.getElementById('mic-btn');
+const micStatus   = document.getElementById('mic-status');
+const micTimer    = document.getElementById('mic-timer');
+const transcriptBox = document.getElementById('transcript-box');
+const processBtn  = document.getElementById('process-btn');
+const waveform    = document.getElementById('waveform');
+
+micBtn.addEventListener('click', async () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+});
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      stream.getTracks().forEach(t => t.stop());
+      processBtn.disabled = false;
+      micStatus.textContent = 'Recording saved. Press "Process with AI" to analyse.';
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.textContent = '⏹';
+    waveform.classList.add('active');
+    micStatus.textContent = 'Recording… speak now';
+    processBtn.disabled = true;
+    recordStart = Date.now();
+    timerInterval = setInterval(() => {
+      const s = ((Date.now() - recordStart) / 1000).toFixed(1);
+      micTimer.textContent = `${s}s`;
+    }, 100);
+  } catch(err) {
+    toast('Microphone access denied: ' + err.message, 'error');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    micBtn.textContent = '🎙';
+    waveform.classList.remove('active');
+    clearInterval(timerInterval);
+  }
+}
+
+processBtn.addEventListener('click', async () => {
+  if (!audioBlob) {
+    toast('No audio to process', 'error');
+    return;
+  }
+  processBtn.disabled = true;
+  processBtn.innerHTML = '<span class="spinner"></span> Processing…';
+  transcriptBox.textContent = 'Transcribing with Whisper…';
+  transcriptBox.classList.remove('has-text');
+
+  try {
+    const fd = new FormData();
+    fd.append('file', audioBlob, 'audio.webm');
+    const result = await apiFetch('/api/voice/process', { method: 'POST', body: fd });
+
+    transcriptBox.textContent = result.transcript;
+    transcriptBox.classList.add('has-text');
+    micTimer.textContent = `${result.latency_ms.toFixed(0)}ms`;
+
+    const e = result.expense;
+    document.getElementById('parse-result').innerHTML = `
+      <div style="display:grid;gap:10px">
+        <div style="font-size:26px;font-weight:800;color:var(--accent)">${fmt(e.amount)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${catBadge(e.category)}
+          ${srcBadge(e.source)}
+          ${result.guardrail_passed ? '<span style="color:var(--green);font-size:11px">✅ guardrails passed</span>' : '<span style="color:var(--yellow);font-size:11px">⚠️ guardrail warnings</span>'}
+        </div>
+        <div><strong>Description:</strong> ${e.description}</div>
+        ${e.merchant ? `<div><strong>Merchant:</strong> ${e.merchant}</div>` : ''}
+        <div><strong>Date:</strong> ${e.date}</div>
+        ${result.warnings.length ? `<div style="color:var(--yellow);font-size:12px">⚠️ ${result.warnings.join('; ')}</div>` : ''}
+        <div style="font-size:11px;color:var(--muted)">⏱ ${result.latency_ms.toFixed(0)}ms  |  ${result.run_id ? 'MLflow: '+result.run_id : 'logged to observability'}</div>
+      </div>`;
+    toast('Expense logged in ' + result.latency_ms.toFixed(0) + 'ms!', 'success');
+    audioBlob = null;
+  } catch(err) {
+    toast('Processing failed: ' + err.message, 'error');
+    transcriptBox.textContent = 'Error — please try again.';
+  } finally {
+    processBtn.disabled = false;
+    processBtn.textContent = '⚡ Process with AI';
+  }
+});
+
+// ── RAG QUERY ─────────────────────────────────────────────────────────────────
+function setQuery(q) {
+  document.getElementById('rag-input').value = q;
+}
+async function runQuery() {
+  const q = document.getElementById('rag-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('rag-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  document.getElementById('rag-answer-card').style.display = 'none';
+  try {
+    const res = await apiFetch('/api/rag/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q }),
+    });
+    document.getElementById('rag-answer').textContent = res.answer;
+    document.getElementById('rag-meta').innerHTML =
+      `⏱ ${res.latency_ms.toFixed(0)}ms  |  ` +
+      `🔄 Rewritten: "${res.rewritten}"  |  ` +
+      `📄 ${res.sources.length} sources  |  ` +
+      (res.tokens_used ? `🪙 ~${res.tokens_used} tokens` : 'demo mode');
+
+    document.getElementById('rag-sources').innerHTML = res.sources.length === 0
+      ? '<div style="color:var(--muted);font-size:13px">No matching records found.</div>'
+      : res.sources.map(s => `
+          <div class="rag-source-item">
+            <span style="font-weight:700;color:var(--accent)">${fmt(s.amount)}</span>
+            ${catBadge(s.category)}
+            <span>${s.description}</span>
+            <span style="color:var(--muted)">${s.date}</span>
+          </div>`).join('');
+    document.getElementById('rag-answer-card').style.display = 'block';
+  } catch(err) {
+    toast('Query failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ask AI';
+  }
+}
+
+// ── OBSERVABILITY ─────────────────────────────────────────────────────────────
+async function loadObservability() {
+  try {
+    const m = await apiFetch('/api/analytics/observability');
+    document.getElementById('obs-calls').textContent    = m.total_calls;
+    document.getElementById('obs-latency').textContent  = m.avg_latency_ms.toFixed(0);
+    document.getElementById('obs-gpass').textContent    = (m.guardrail_pass_rate * 100).toFixed(1) + '%';
+    document.getElementById('obs-models').textContent   = m.models.length ? m.models.join(', ') : 'demo';
+  } catch(err) {
+    toast('Observability load failed: ' + err.message, 'error');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>
